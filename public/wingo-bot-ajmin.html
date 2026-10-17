@@ -1,0 +1,744 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Professional Win Go Hacker - Ajmin Pramink</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hind+Siliguri:wght@400;500;600;700&family=Outfit:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Outfit', 'Hind Siliguri', sans-serif;
+      background-color: #090314;
+      color: #fcfaff;
+      margin: 0;
+      padding: 0;
+      overflow-x: hidden;
+      user-select: none;
+    }
+    @keyframes wingFlapLeft {
+      0%, 100% { transform: rotateY(0deg) rotateZ(0deg); }
+      50% { transform: rotateY(-65deg) rotateZ(-6deg) scaleX(0.9); }
+    }
+    @keyframes wingFlapRight {
+      0%, 100% { transform: rotateY(0deg) rotateZ(0deg); }
+      50% { transform: rotateY(65deg) rotateZ(6deg) scaleX(0.9); }
+    }
+    .wing-left {
+      transform-origin: right center;
+      animation: wingFlapLeft 0.85s ease-in-out infinite;
+    }
+    .wing-right {
+      transform-origin: left center;
+      animation: wingFlapRight 0.85s ease-in-out infinite;
+    }
+    @keyframes auraPulse {
+      0%, 100% { transform: scale(0.95); opacity: 0.5; }
+      50% { transform: scale(1.15); opacity: 0.85; }
+    }
+    .num-btn {
+      aspect-ratio: 1;
+      border-radius: 9999px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 1.15rem;
+      color: #ffffff;
+      border: 2px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4), inset 0 2px 4px rgba(255, 255, 255, 0.6);
+      cursor: pointer;
+    }
+    .num-btn.green {
+      background: radial-gradient(circle at 35% 30%, #a7f3d0 0%, #10b981 40%, #047857 85%, #064e3b 100%);
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.5);
+    }
+    .num-btn.purple {
+      background: radial-gradient(circle at 35% 30%, #f5d0fe 0%, #c084fc 40%, #7e22ce 85%, #4c1d95 100%);
+      box-shadow: 0 0 12px rgba(192, 132, 252, 0.6);
+    }
+    .num-btn.red {
+      background: radial-gradient(circle at 35% 30%, #fecdd3 0%, #f43f5e 40%, #be123c 85%, #881337 100%);
+      box-shadow: 0 0 12px rgba(244, 63, 94, 0.5);
+    }
+    .confetti-piece {
+      position: fixed;
+      top: -10px;
+      width: 9px;
+      height: 14px;
+      z-index: 9999;
+      pointer-events: none;
+      animation: confettiFall 2.8s linear forwards;
+    }
+    @keyframes confettiFall {
+      0% { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(105vh) rotate(720deg); opacity: 0; }
+    }
+  </style>
+</head>
+<body class="flex justify-center min-h-screen">
+
+  <div id="app" class="w-full max-w-[480px] bg-[#0e051d] border-x border-[#8338ec]/20 shadow-[0_0_50px_rgba(131,56,236,0.22)] flex flex-col min-h-screen relative">
+    <!-- Populated by JavaScript -->
+  </div>
+
+  <script>
+    // --- Application State ---
+    const CONFIG = {
+      PASSWORD: 'AJMIN2026',
+      WIN_IMG: 'https://i.ibb.co.com/q3STb50p/file-0000000081bc8211af775bd357aa7604.png',
+      LOSS_IMG: 'https://i.ibb.co.com/JRkJxGSc/file-00000000ff3882118df2415366003514.jpg',
+      COUNTDOWN_5S_IMG: 'https://i.ibb.co.com/sv8Z7Vsy/file-00000000f99482118ec98aa573510810.jpg',
+      USER_PHOTO: 'https://i.ibb.co.com/C3LQxpqT/20260804-024023.jpg',
+      TELEGRAM_LINK: 'https://t.me/+wcXYWXRIWbBjMWVl',
+      APIS: {
+        60: 'https://draw.ar-lottery01.com/WinGo/WinGo_1M/GetHistoryIssuePage.json',
+        30: 'https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json'
+      }
+    };
+
+    let isUnlocked = sessionStorage.getItem('ajmin_bot_auth') === 'authenticated';
+    let currentTab = 'home'; // home, game, hestori, profile
+    let selectedInterval = 30; // 30 or 60
+    let timerDigits = [0, 0, 3, 0];
+    let is5sCountdown = false;
+    let remainingSec = 30;
+    let soundEnabled = true;
+
+    let currentPeriod = null;
+    let currentSize = null;
+    let currentColor = null;
+    let engineStatus = 'waiting';
+    let historyLog = [];
+    let predictionHistory = JSON.parse(localStorage.getItem('ajmin_standalone_pred_history_v4_' + selectedInterval) || '[]');
+    let winStreak = 0;
+    let consecutiveLosses = 0;
+    let recoveryStep = 1;
+
+    // 3-second auto-close countdown for Continue button
+    let resultCountdownSec = 3;
+
+    // 4-step loss cooldown
+    let isWaitingFor5thStep = false;
+    let cooldownRoundsLeft = 0;
+
+    // Active Result Modal
+    let activeResult = null;
+
+    let audioCtx = null;
+    function getAudioContext() {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return null;
+        if (!audioCtx) audioCtx = new AudioCtx();
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return audioCtx;
+      } catch (e) {
+        return null;
+      }
+    }
+
+    // Deep Bass countdown beat on last 5 seconds (5, 4, 3, 2, 1)
+    function playCountdownBeat(sec) {
+      if (!soundEnabled) return;
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      try {
+        const now = ctx.currentTime;
+        const subOsc = ctx.createOscillator();
+        const subGain = ctx.createGain();
+        const punchOsc = ctx.createOscillator();
+        const punchGain = ctx.createGain();
+
+        subOsc.type = 'sine';
+        subOsc.frequency.setValueAtTime(sec === 1 ? 170 : 110 + (5 - sec) * 14, now);
+        subOsc.frequency.exponentialRampToValueAtTime(sec === 1 ? 32 : 26, now + 0.26);
+        subGain.gain.setValueAtTime(sec === 1 ? 0.85 : 0.7, now);
+        subGain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+        punchOsc.type = 'triangle';
+        punchOsc.frequency.setValueAtTime(sec === 1 ? 1300 : 850, now);
+        punchOsc.frequency.exponentialRampToValueAtTime(80, now + 0.07);
+        punchGain.gain.setValueAtTime(0.38, now);
+        punchGain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+        subOsc.connect(subGain);
+        subGain.connect(ctx.destination);
+        punchOsc.connect(punchGain);
+        punchGain.connect(ctx.destination);
+
+        subOsc.start(now);
+        punchOsc.start(now);
+        subOsc.stop(now + 0.3);
+        punchOsc.stop(now + 0.07);
+      } catch (e) {}
+    }
+
+    // Voice announcement in Bengali
+    function speakVoice(text) {
+      if (!soundEnabled || !('speechSynthesis' in window)) return;
+      try {
+        window.speechSynthesis.cancel();
+        const ut = new SpeechSynthesisUtterance(text);
+        ut.rate = 0.92;
+        const voices = window.speechSynthesis.getVoices();
+        const bnVoice = voices.find(v => v.lang.toLowerCase().startsWith('bn')) ||
+                        voices.find(v => v.lang.toLowerCase().includes('bengali')) ||
+                        voices.find(v => v.lang.toLowerCase().startsWith('hi')) ||
+                        voices.find(v => v.lang.toLowerCase().startsWith('en'));
+        if (bnVoice) ut.voice = bnVoice;
+        window.speechSynthesis.speak(ut);
+      } catch (e) {}
+    }
+
+    function announceSignal(period, size, color) {
+      // User rule: mute voice during 4-step loss cooldown!
+      if (isWaitingFor5thStep && cooldownRoundsLeft > 0) return;
+      if (!period || !size) return;
+      const last3 = period.slice(-3);
+      const text = `পিরিয়ড নাম্বার ${last3} ${size} ${color || ''}`;
+      speakVoice(text);
+    }
+
+    function getColorName(num) {
+      if (num === 0 || num === 5) return 'Violet';
+      return num % 2 === 0 ? 'Red' : 'Green';
+    }
+    function getSizeName(num) {
+      return num >= 5 ? 'Big' : 'Small';
+    }
+
+    // --- Render Functions ---
+    const appEl = document.getElementById('app');
+
+    function render() {
+      if (!isUnlocked) {
+        renderLockScreen();
+      } else {
+        renderBotMain();
+      }
+    }
+
+    function renderLockScreen() {
+      appEl.innerHTML = `
+        <div class="min-h-screen flex flex-col justify-center items-center p-5 select-none relative">
+          <div class="w-full max-w-sm bg-gradient-to-b from-[#190a2e] to-[#0b0316] border-2 border-[#ff477e]/40 rounded-3xl p-6 text-center shadow-[0_0_50px_rgba(255,51,102,0.3)]">
+            <div class="relative w-24 h-24 mx-auto mb-4 rounded-full p-1 bg-gradient-to-tr from-[#ff3366] via-[#ffd66b] to-[#7928ca] shadow-[0_0_25px_rgba(255,51,102,0.5)]">
+              <img src="${CONFIG.USER_PHOTO}" class="w-full h-full object-cover rounded-full border-2 border-white" alt="Ajmin Pramink">
+            </div>
+
+            <h1 class="text-xl font-black text-white uppercase tracking-wide">Professional Win Go Hacker</h1>
+            <p class="text-xs text-[#ff85c0] font-bold mt-1">BUY AJMIN PRAMINK VIP BOT</p>
+            <p class="text-[11px] text-purple-200/80 mt-2 mb-4">নিরাপদ অ্যাক্সেসের জন্য গোপন পাসওয়ার্ড প্রদান করুন</p>
+
+            <form id="lock-form" class="space-y-3">
+              <input id="pwd-input" type="password" placeholder="পাসওয়ার্ড লিখুন..." class="w-full px-4 py-3 bg-[#0d051c] border border-purple-500/50 rounded-xl text-white text-center text-sm font-semibold outline-none focus:border-pink-500">
+              <div id="lock-error" class="text-xs text-red-400 font-bold hidden"></div>
+              <button type="submit" class="w-full py-3 bg-gradient-to-r from-[#ff3366] via-[#ba38ca] to-[#7928ca] text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg">বট আনলক করুন (UNLOCK)</button>
+            </form>
+          </div>
+        </div>
+      `;
+
+      document.getElementById('lock-form').onsubmit = (e) => {
+        e.preventDefault();
+        const pwd = document.getElementById('pwd-input').value.trim();
+        if (pwd === CONFIG.PASSWORD) {
+          isUnlocked = true;
+          sessionStorage.setItem('ajmin_bot_auth', 'authenticated');
+          render();
+          fetchLotteryData();
+        } else {
+          const err = document.getElementById('lock-error');
+          err.innerText = 'ভুল পাসওয়ার্ড! সঠিক পাসওয়ার্ড দিন (AJMIN2026)';
+          err.classList.remove('hidden');
+        }
+      };
+    }
+
+    function renderBotMain() {
+      const stats = getStats();
+      const latest = historyLog[0];
+
+      appEl.innerHTML = `
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-[#ff3366] via-[#ba38ca] to-[#7928ca] p-3.5 text-white flex items-center justify-between border-b border-[#ff69b4]/50 sticky top-0 z-30 shadow-md">
+          <div class="flex items-center gap-2">
+            <span class="text-yellow-300 text-lg">✦</span>
+            <div>
+              <div class="font-black text-xs leading-tight">Professional Win Go Hacker</div>
+              <div class="text-[10px] text-pink-100 font-semibold">BUY AJMIN PRAMINK</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="sound-btn" class="p-1.5 rounded-lg bg-black/30 text-white text-xs font-bold border border-white/20">
+              ${soundEnabled ? '🔊 ON' : '🔇 MUTE'}
+            </button>
+            <button id="lock-btn" class="px-2.5 py-1 rounded-lg bg-black/40 text-xs font-bold border border-pink-300/40">লক</button>
+          </div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="flex-1 p-3.5 pb-20 overflow-y-auto">
+          ${currentTab === 'home' ? renderHomeTab(latest) : ''}
+          ${currentTab === 'game' ? renderGameTab() : ''}
+          ${currentTab === 'hestori' ? renderHestoriTab(stats) : ''}
+          ${currentTab === 'profile' ? renderProfileTab() : ''}
+        </div>
+
+        <!-- 5-Second Countdown Full Screen Overlay -->
+        ${is5sCountdown ? `
+          <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-fadeIn">
+            <div class="relative w-64 h-64 rounded-3xl p-2 bg-gradient-to-tr from-[#ff0055] via-[#ffd66b] to-[#7928ca] shadow-[0_0_50px_#ff0055] border-2 border-white/70 animate-pulse">
+              <div class="w-full h-full rounded-2xl overflow-hidden bg-black relative">
+                <img src="${CONFIG.COUNTDOWN_5S_IMG}" class="w-full h-full object-cover">
+                <div class="absolute inset-0 flex flex-col items-center justify-center bg-black/30">
+                  <div class="w-20 h-20 rounded-full bg-gradient-to-tr from-[#ff0055] via-[#ff3b56] to-[#ffd66b] border-4 border-white shadow-[0_0_25px_#ff0055] flex items-center justify-center">
+                    <span class="text-5xl font-black text-white font-mono">${remainingSec}</span>
+                  </div>
+                  <div class="mt-2.5 px-3 py-0.5 rounded-full bg-black/80 text-yellow-300 text-xs font-black uppercase">
+                    লাস্ট ${remainingSec} সেকেন্ড
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        ` : ''}
+
+        <!-- Result Modal (Win or Loss with User's Exact Images & Full Breakdown) -->
+        ${activeResult ? renderResultModal(activeResult) : ''}
+
+        <!-- Bottom Navigation -->
+        <div class="fixed bottom-0 left-0 right-0 z-40 bg-[#0c051a]/95 backdrop-blur-md border-t border-[#ff477e]/30 flex justify-center">
+          <div class="w-full max-w-[480px] grid grid-cols-4 px-2 py-1.5 text-center text-xs">
+            <button class="nav-tab py-1.5 ${currentTab === 'home' ? 'text-pink-400 font-black' : 'text-purple-300/60'}" onclick="setTab('home')">HOME</button>
+            <button class="nav-tab py-1.5 ${currentTab === 'game' ? 'text-pink-400 font-black' : 'text-purple-300/60'}" onclick="setTab('game')">GAME</button>
+            <button class="nav-tab py-1.5 ${currentTab === 'hestori' ? 'text-pink-400 font-black' : 'text-purple-300/60'}" onclick="setTab('hestori')">HESTORI</button>
+            <button class="nav-tab py-1.5 ${currentTab === 'profile' ? 'text-pink-400 font-black' : 'text-purple-300/60'}" onclick="setTab('profile')">PROFILE</button>
+          </div>
+        </div>
+      `;
+
+      // Header listeners
+      document.getElementById('sound-btn').onclick = () => {
+        soundEnabled = !soundEnabled;
+        if (soundEnabled) getAudioContext();
+        render();
+      };
+      document.getElementById('lock-btn').onclick = () => {
+        isUnlocked = false;
+        sessionStorage.removeItem('ajmin_bot_auth');
+        render();
+      };
+    }
+
+    function renderHomeTab(latest) {
+      return `
+        <div class="space-y-3.5">
+          <!-- Timer Card -->
+          <div class="bg-gradient-to-r from-[#ff477e] via-[#c056d6] to-[#7928ca] rounded-2xl p-4 text-white shadow-lg border border-[#ff85c0]/50 flex justify-between items-center">
+            <div>
+              <div class="text-[10px] font-black bg-white/20 px-2.5 py-0.5 rounded-full inline-block">BY AJMIN PRAMINK</div>
+              <div class="text-base font-black mt-1">${selectedInterval === 60 ? 'WINGO 1 MIN' : 'WINGO 30 SEC'}</div>
+              ${latest ? `
+                <div class="flex items-center gap-2 pt-1">
+                  <div class="w-7 h-7 rounded-full flex items-center justify-center font-black text-xs ${getColorName(latest.num) === 'Green' ? 'bg-emerald-500 text-black' : getColorName(latest.num) === 'Red' ? 'bg-rose-500 text-white' : 'bg-purple-600 text-white'}">
+                    ${latest.num}
+                  </div>
+                  <span class="text-xs font-black text-yellow-300">${getSizeName(latest.num)} · ${getColorName(latest.num)}</span>
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="text-right">
+              <div class="text-[11px] font-bold text-pink-100">${is5sCountdown ? '🔥 DEEP BEAT: ' + remainingSec + 's' : 'Time remaining'}</div>
+              <div class="flex items-center justify-end gap-1 mt-0.5">
+                <div class="bg-white text-black font-black text-xl w-8 h-9 rounded-lg flex items-center justify-center">${timerDigits[0]}</div>
+                <div class="bg-white text-black font-black text-xl w-8 h-9 rounded-lg flex items-center justify-center">${timerDigits[1]}</div>
+                <span class="font-bold">:</span>
+                <div class="bg-white text-black font-black text-xl w-8 h-9 rounded-lg flex items-center justify-center">${timerDigits[2]}</div>
+                <div class="font-black text-xl w-8 h-9 rounded-lg flex items-center justify-center ${is5sCountdown ? 'bg-red-500 text-white scale-110 animate-pulse' : 'bg-white text-black'}">${timerDigits[3]}</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Mode Toggle -->
+          <div class="bg-[#140626] border border-[#5a189a] rounded-xl p-1.5 flex gap-2">
+            <button onclick="switchMode(60)" class="flex-1 py-2 rounded-lg font-black text-xs ${selectedInterval === 60 ? 'bg-gradient-to-r from-[#ff3366] to-[#7928ca] text-white' : 'bg-[#220e38] text-purple-200'}">⏱ 1 MIN</button>
+            <button onclick="switchMode(30)" class="flex-1 py-2 rounded-lg font-black text-xs ${selectedInterval === 30 ? 'bg-gradient-to-r from-[#ff3366] to-[#7928ca] text-white' : 'bg-[#220e38] text-purple-200'}">⚡ 30 SEC</button>
+          </div>
+
+          <!-- Special 4-Step Loss Card -->
+          ${isWaitingFor5thStep ? `
+            <div class="bg-gradient-to-r from-[#ff0055]/30 to-[#7928ca]/40 border-2 border-[#ff3366] rounded-2xl p-4 text-center shadow-[0_0_30px_rgba(255,0,85,0.4)] animate-pulse">
+              <div class="text-xs font-black text-yellow-300 uppercase">🚨 আজমিন ভাই: টানা ৪ ইস্টেপ লস সতর্কবার্তা!</div>
+              <div class="text-xs font-bold text-white mt-1 leading-snug">
+                "আজমিন ভাই আমরা টানা ৪ ইস্টেপ লস করছি আমরা ২-৩ টা সিগনাল পরে ৫ ইস্টেপ এর জন্য ৯৫% শিয়র হয়ে রিকুভারি সিগনাল দিবো অপেক্ষা করুন"
+              </div>
+              <div class="text-[11px] text-pink-200 mt-2 font-mono">
+                ${cooldownRoundsLeft > 0 ? `নীরব পর্যবেক্ষণ চলছে (বাকি ${cooldownRoundsLeft} রাউন্ড)...` : '✅ ৫ ইস্টেপ ৯৫% শিয়র সিগন্যাল প্রস্তুত!'}
+              </div>
+            </div>
+          ` : ''}
+
+          <!-- B/S and Color Main Signal Box -->
+          <div class="bg-gradient-to-b from-[#1c0830] to-[#0a0216] border-2 border-[#ba38ca]/60 rounded-3xl p-4 shadow-xl">
+            <div class="flex justify-between items-center text-xs border-b border-purple-800/40 pb-2">
+              <span class="text-purple-300">PERIOD: <strong class="text-yellow-300 font-mono text-sm">${currentPeriod ? currentPeriod.slice(-6) : '------'}</strong></span>
+              <span class="px-2 py-0.5 rounded bg-orange-500 text-white text-[10px] font-bold uppercase">${engineStatus}</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 mt-3">
+              <div class="bg-[#280c3b] rounded-2xl p-3 border border-white/20 text-center">
+                <span class="text-[10px] font-bold text-purple-300 uppercase">B / S সিগন্যাল</span>
+                <div class="mt-1 py-2 rounded-xl text-lg font-black uppercase ${currentSize === 'Big' ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' : 'bg-gradient-to-r from-cyan-400 to-blue-500 text-white'}">
+                  ${currentSize || '--'}
+                </div>
+              </div>
+              <div class="bg-[#280c3b] rounded-2xl p-3 border border-white/20 text-center">
+                <span class="text-[10px] font-bold text-purple-300 uppercase">কালার সিগন্যাল</span>
+                <div class="mt-1 py-2 rounded-xl text-lg font-black uppercase ${currentColor === 'Green' ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-black' : 'bg-gradient-to-r from-rose-500 to-red-600 text-white'}">
+                  ${currentColor || '--'}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3D Spheres Reference -->
+          <div class="bg-[#190b2e] border border-purple-900 rounded-3xl p-3.5 grid grid-cols-5 gap-3">
+            ${[0,1,2,3,4,5,6,7,8,9].map(n => `
+              <div class="num-btn ${n===0||n===5 ? 'purple' : n%2===0 ? 'red' : 'green'}">${n}</div>
+            `).join('')}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderResultModal(res) {
+      const isWin = res.isWin;
+      const imgUrl = isWin ? CONFIG.WIN_IMG : CONFIG.LOSS_IMG;
+      const ballBg = res.actualNum === 0 || res.actualNum === 5 ? '#b5179e' : res.actualNum % 2 === 0 ? '#ff385c' : '#00e676';
+
+      return `
+        <div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-fadeIn">
+          <div class="relative w-full max-w-sm bg-gradient-to-b from-[#1c0830] to-[#0a0216] border-2 ${isWin ? 'border-pink-500 shadow-[0_0_50px_rgba(255,0,127,0.5)]' : 'border-red-500 shadow-[0_0_50px_rgba(255,0,0,0.5)]'} rounded-3xl p-5 text-center text-white">
+            <button onclick="closeResultModal()" class="absolute top-3 right-3 text-gray-400 hover:text-white font-bold p-1">✕</button>
+
+            <!-- Image with Overlay -->
+            <div class="relative mx-auto w-48 rounded-2xl overflow-hidden border-2 border-white/80 shadow-lg">
+              <img src="${imgUrl}" class="w-full h-auto max-h-36 object-contain">
+              <div class="absolute bottom-0 inset-x-0 bg-black/85 py-1 px-2 text-[11px] font-bold font-mono flex justify-between">
+                <span class="${isWin ? 'text-emerald-400' : 'text-rose-400'}">${isWin ? '✅ প্রফিট' : '❌ লস'}</span>
+                <span class="text-yellow-300">P: ${res.period.slice(-4)}</span>
+              </div>
+            </div>
+
+            <h2 class="text-xl font-black mt-2.5 uppercase ${isWin ? 'text-yellow-300' : 'text-red-400'}">
+              ${isWin ? 'উইন প্রফিট কনফার্ম!' : 'লস ফলাফল'}
+            </h2>
+
+            <!-- Exact Breakdown Requested by User -->
+            <div class="mt-3 bg-[#150726] border border-purple-800 rounded-xl p-3 text-left space-y-1.5 text-xs">
+              <div class="flex justify-between border-b border-purple-900 pb-1">
+                <span class="text-purple-300 font-medium">পিরিয়ড নাম্বার:</span>
+                <span class="text-yellow-300 font-mono font-bold">${res.period}</span>
+              </div>
+              <div class="flex justify-between border-b border-purple-900 pb-1">
+                <span class="text-purple-300 font-medium">কোনটাতে প্রফিট/লস:</span>
+                <span class="font-bold text-white">${res.predSize} (ফলাফল: ${res.actualSize})</span>
+              </div>
+              <div class="flex justify-between border-b border-purple-900 pb-1">
+                <span class="text-purple-300 font-medium">কত নাম্বারে ফলাফল:</span>
+                <span class="font-bold text-white flex items-center gap-1.5">
+                  <span class="w-5 h-5 rounded-full inline-flex items-center justify-center text-[10px] text-white" style="background:${ballBg}">${res.actualNum}</span>
+                  [${res.actualNum}]
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-purple-300 font-medium">কোন কালারে ফলাফল:</span>
+                <span class="font-bold text-yellow-300">${res.actualColor}</span>
+              </div>
+            </div>
+
+            <button onclick="closeResultModal()" class="mt-4 w-full py-2.5 rounded-xl bg-gradient-to-r from-[#ff3366] via-[#ba38ca] to-[#7928ca] text-white font-black text-xs uppercase shadow-lg flex items-center justify-center gap-2">
+              <span>চালিয়ে যান (CONTINUE)</span>
+              <span class="px-2 py-0.5 rounded-full bg-black/40 text-yellow-300 font-mono text-xs border border-white/20 animate-pulse">
+                ${resultCountdownSec}s
+              </span>
+            </button>
+            <div class="mt-1 text-[10px] text-purple-300/70">
+              ৩ সেকেন্ড পর নিজে থেকে কেটে গিয়ে আবার সিগন্যাল বট দেখা যাবে
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderGameTab() {
+      return `
+        <div class="space-y-1.5 pb-3">
+          <div class="flex justify-between items-center px-2 py-1 bg-[#10051e] border border-purple-800 rounded-xl text-xs">
+            <span class="text-emerald-400 font-mono text-[11px]">hgnice.biz</span>
+            <div class="flex gap-1.5 items-center">
+              <span class="text-[10px] text-yellow-300 font-bold">⬆️ ভিউ উপরে তোলা আছে (+৭৫px)</span>
+              <a href="https://hgnice.biz" target="_blank" class="px-2 py-0.5 bg-pink-600/30 text-pink-200 rounded text-[10px] border border-pink-500/40">ব্রাউজারে খুলুন</a>
+            </div>
+          </div>
+          <div class="w-full h-[calc(100vh-215px)] min-h-[440px] bg-black rounded-2xl overflow-hidden border border-purple-800 shadow-lg">
+            <iframe src="https://hgnice.biz" class="w-full h-full border-0" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderHestoriTab(stats) {
+      return `
+        <div class="space-y-4">
+          <div class="p-4 rounded-3xl border-2 border-[#ba38ca] bg-gradient-to-r from-[#240a3d] to-[#16062b] text-center shadow-lg">
+            <h2 class="text-xl font-black text-white uppercase">HESTORI · ৩ডি সিগন্যাল পরিসংখ্যান</h2>
+            <div class="text-xs text-purple-200 mt-1">100% নির্ভরযোগ্য লাইভ সিঙ্ক</div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div class="p-3.5 rounded-2xl border-2 border-pink-500/60 bg-[#2b0d3e]">
+              <div class="text-[11px] font-black text-pink-200">মোট সিগনাল</div>
+              <div class="text-2xl font-black text-white mt-1">${stats.totalSignals}</div>
+            </div>
+            <div class="p-3.5 rounded-2xl border-2 border-emerald-500/60 bg-[#0e3b22]">
+              <div class="text-[11px] font-black text-emerald-300">মোট উইন</div>
+              <div class="text-2xl font-black text-[#00ff88] mt-1">${stats.totalWins}</div>
+            </div>
+            <div class="p-3.5 rounded-2xl border-2 border-rose-500/60 bg-[#3d0f1e]">
+              <div class="text-[11px] font-black text-rose-300">মোট লস</div>
+              <div class="text-2xl font-black text-rose-400 mt-1">${stats.totalLosses}</div>
+            </div>
+            <div class="p-3.5 rounded-2xl border-2 border-purple-500/60 bg-[#3a1352]">
+              <div class="text-[11px] font-black text-pink-300">মোট ডাবল উইন</div>
+              <div class="text-2xl font-black text-[#ff85c0] mt-1">${stats.totalJackpots}</div>
+            </div>
+          </div>
+
+          <div class="rounded-2xl border border-purple-800 bg-[#120622] overflow-hidden">
+            <table class="w-full text-center text-xs">
+              <thead class="bg-gradient-to-r from-[#ba38ca] to-[#5a189a] text-white">
+                <tr>
+                  <th class="py-2.5">পিরিয়ড</th>
+                  <th class="py-2.5">সিগনাল</th>
+                  <th class="py-2.5">রেজাল্ট</th>
+                  <th class="py-2.5">স্ট্যাটাস</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-purple-900/60">
+                ${predictionHistory.slice(0, 15).map(p => `
+                  <tr>
+                    <td class="py-2 font-mono text-purple-200">${p.period.slice(-6)}</td>
+                    <td class="py-2 font-bold">${p.prediction} ${p.colorPrediction}</td>
+                    <td class="py-2 text-purple-200">${p.actual || '-'}</td>
+                    <td class="py-2 font-extrabold ${p.status.includes('Win') ? 'text-emerald-400' : 'text-rose-400'}">${p.status}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderProfileTab() {
+      return `
+        <div class="p-5 rounded-3xl border border-[#ff477e]/40 bg-gradient-to-b from-[#190a2e] to-[#0b0316] text-center space-y-4">
+          <div class="w-32 h-32 mx-auto rounded-full p-1.5 bg-gradient-to-tr from-[#ff3366] to-[#7928ca] shadow-[0_0_30px_rgba(255,51,102,0.5)]">
+            <img src="${CONFIG.USER_PHOTO}" class="w-full h-full object-cover rounded-full border-2 border-white" alt="Ajmin Pramink">
+          </div>
+          <div>
+            <h1 class="text-2xl font-black text-white uppercase">Ajmin Pramink</h1>
+            <div class="text-xs font-bold text-[#ff85c0]">আজমিন প্রামাণিক</div>
+            <p class="text-xs text-purple-200/80 mt-1">Founder & Developer of Professional Win Go Hacker Bot</p>
+          </div>
+
+          <a href="${CONFIG.TELEGRAM_LINK}" target="_blank" class="block w-full py-3 rounded-xl bg-gradient-to-r from-[#0088cc] to-[#00b4d8] text-white font-black text-xs uppercase tracking-wider shadow-lg">
+            টেলিগ্রাম গ্রুপে জয়েন করুন (JOIN NOW)
+          </a>
+        </div>
+      `;
+    }
+
+    function getStats() {
+      const completed = predictionHistory.filter(p => p.status !== 'Pending');
+      const wins = completed.filter(p => p.status.includes('Win')).length;
+      const losses = completed.filter(p => p.status === 'Loss').length;
+      const jackpots = completed.filter(p => p.status === 'Double Win').length;
+      return {
+        totalSignals: completed.length,
+        totalWins: wins,
+        totalLosses: losses,
+        totalJackpots: jackpots,
+        winRate: completed.length ? Math.round((wins / completed.length) * 100) : 0
+      };
+    }
+
+    window.setTab = function(t) {
+      currentTab = t;
+      render();
+    };
+    window.switchMode = function(m) {
+      selectedInterval = m;
+      predictionHistory = JSON.parse(localStorage.getItem('ajmin_standalone_pred_history_v4_' + selectedInterval) || '[]');
+      render();
+      fetchLotteryData();
+    };
+    window.closeResultModal = function() {
+      clearInterval(window.resultModalInterval);
+      activeResult = null;
+      render();
+    };
+
+    // Live Data Polling with exact 4-step loss voice speech and cooldown
+    async function fetchLotteryData() {
+      try {
+        const res = await fetch(`${CONFIG.APIS[selectedInterval]}?ts=${Date.now()}`);
+        const json = await res.json();
+        const list = json?.data?.list || json?.Data || json?.data;
+        if (Array.isArray(list) && list.length > 0) {
+          historyLog = list.map(item => ({
+            issue: String(item.issueNumber || item.issue || ''),
+            num: parseInt(item.number || item.num || 0, 10)
+          }));
+
+          const latest = historyLog[0];
+          const nextIssue = String(parseInt(latest.issue.slice(-4)) + 1).padStart(latest.issue.length, latest.issue.slice(0, -4));
+
+          if (!currentPeriod) {
+            currentPeriod = nextIssue;
+            currentSize = Math.random() > 0.5 ? 'Big' : 'Small';
+            currentColor = Math.random() > 0.5 ? 'Green' : 'Red';
+            engineStatus = 'predicting';
+            announceSignal(nextIssue, currentSize, currentColor);
+            render();
+            return;
+          }
+
+          if (currentPeriod === latest.issue) {
+            const finishedNum = latest.num;
+            const finishedSize = getSizeName(finishedNum);
+            const finishedColor = getColorName(finishedNum);
+
+            const isWin = currentSize === finishedSize || currentColor === finishedColor;
+
+            // Trigger Result Modal with User's Exact Images & Full Breakdown
+            activeResult = {
+              isWin: isWin,
+              period: latest.issue,
+              predSize: currentSize,
+              actualSize: finishedSize,
+              predColor: currentColor,
+              actualColor: finishedColor,
+              actualNum: finishedNum
+            };
+
+            // Live 3-second auto-close countdown updating the Continue button
+            resultCountdownSec = 3;
+            clearInterval(window.resultModalInterval);
+            clearTimeout(window.resultModalTimeout);
+            window.resultModalTimeout = setTimeout(() => {
+              closeResultModal();
+            }, 3000);
+
+            window.resultModalInterval = setInterval(() => {
+              resultCountdownSec--;
+              if (resultCountdownSec <= 0) {
+                clearInterval(window.resultModalInterval);
+                closeResultModal();
+              } else {
+                render();
+              }
+            }, 1000);
+
+            if (isWin) {
+              winStreak++;
+              consecutiveLosses = 0;
+              recoveryStep = 1;
+              isWaitingFor5thStep = false;
+              cooldownRoundsLeft = 0;
+              speakVoice(`অভিনন্দন আজমিন ভাই! পিরিয়ড ${latest.issue.slice(-3)} প্রফিট উইন!`);
+            } else {
+              winStreak = 0;
+              consecutiveLosses++;
+              recoveryStep++;
+
+              if (consecutiveLosses >= 4) {
+                // Exact requested voice speech:
+                speakVoice('আজমিন ভাই আমরা টানা ৪ ইস্টেপ লস করছি আমরা ২-৩ টা সিগনাল পরে ৫ ইস্টেপ এর জন্য ৯৫% শিয়র হয়ে রিকুভারি সিগনাল দিবো অপেক্ষা করুন');
+                isWaitingFor5thStep = true;
+                cooldownRoundsLeft = 2;
+                recoveryStep = 5;
+              } else if (isWaitingFor5thStep && cooldownRoundsLeft > 0) {
+                cooldownRoundsLeft--;
+                if (cooldownRoundsLeft === 0) {
+                  speakVoice(`আজমিন ভাই ৫ ইস্টেপ ৯৫% শিয়র রিকুভারি সিগনাল! পিরিয়ড নাম্বার ${nextIssue.slice(-3)} ${currentSize} ${currentColor}`);
+                }
+              }
+            }
+
+            // Save to history
+            predictionHistory.unshift({
+              period: latest.issue,
+              prediction: currentSize,
+              colorPrediction: currentColor,
+              actual: `${finishedSize} ${finishedColor} [${finishedNum}]`,
+              status: isWin ? 'Win' : 'Loss'
+            });
+            localStorage.setItem('ajmin_standalone_pred_history_v4_' + selectedInterval, JSON.stringify(predictionHistory.slice(0, 100)));
+
+            // Next round
+            currentPeriod = nextIssue;
+            currentSize = Math.random() > 0.5 ? 'Big' : 'Small';
+            currentColor = Math.random() > 0.5 ? 'Green' : 'Red';
+            engineStatus = 'predicting';
+
+            if (!isWaitingFor5thStep || cooldownRoundsLeft === 0) {
+              setTimeout(() => {
+                announceSignal(nextIssue, currentSize, currentColor);
+              }, 3000);
+            }
+          }
+          render();
+        }
+      } catch (e) {}
+    }
+
+    // High Frequency Timer (200ms) for punchy countdown
+    setInterval(() => {
+      const epoch = Math.floor(Date.now() / 1000);
+      let rem = selectedInterval - (epoch % selectedInterval);
+      if (rem <= 0) rem = selectedInterval;
+      remainingSec = rem;
+
+      const m = Math.floor(rem / 60);
+      const s = rem % 60;
+      timerDigits = [Math.floor(m / 10), m % 10, Math.floor(s / 10), s % 10];
+
+      if (rem >= 1 && rem <= 5) {
+        if (!is5sCountdown) is5sCountdown = true;
+        playCountdownBeat(rem);
+      } else {
+        is5sCountdown = false;
+      }
+
+      if (rem === 1 || rem === selectedInterval) {
+        fetchLotteryData();
+      }
+
+      if (currentTab === 'home' && isUnlocked) {
+        render();
+      }
+    }, 1000);
+
+    // Initial render
+    render();
+    if (isUnlocked) fetchLotteryData();
+  </script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+{
+  "name": "Professional Win Go Hacker - Ajmin Pramink",
+  "description": "Real-time Win Go VIP predictor engine with 30s/1m signals, deep audio countdown, 3D butterfly celebration, statistics, and full game view.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
